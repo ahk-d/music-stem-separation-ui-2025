@@ -6,7 +6,6 @@ import torchaudio
 from demucs.pretrained import get_model
 from demucs.apply import apply_model
 import os
-import base64
 
 # --- Setup the model ---
 print("Setting up the model...")
@@ -18,17 +17,11 @@ model = model.to(device)
 model.eval()
 print("Model loaded successfully.")
 
-# --- Helper function to convert WAV to base64 data URI ---
-def file_to_data_uri(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    return f"data:audio/wav;base64,{base64.b64encode(data).decode()}"
-
 # --- Separation function ---
 def separate_stems(audio_path):
     """
     Separates an audio file into drums, bass, other, and vocals.
-    Returns base64-encoded audio URIs for frontend playback.
+    Returns FILE PATHS (not base64).
     """
     if audio_path is None:
         return None, None, None, None, "Please upload an audio file."
@@ -48,19 +41,19 @@ def separate_stems(audio_path):
             sources = apply_model(model, wav[None], device=device, progress=True)[0]
         print("Separation complete.")
 
-        # Save stems temporarily & encode to base64 URIs
+        # Save stems temporarily
         stem_names = ["drums", "bass", "other", "vocals"]
         output_dir = "separated_stems"
         os.makedirs(output_dir, exist_ok=True)
 
-        output_uris = []
+        output_paths = []
         for i, name in enumerate(stem_names):
             out_path = os.path.join(output_dir, f"{name}.wav")
             torchaudio.save(out_path, sources[i].cpu(), sr)
-            output_uris.append(file_to_data_uri(out_path))
-            print(f"Encoded {name} to base64 URI")
+            output_paths.append(out_path)
+            print(f"✅ Saved {name} to {out_path}")
 
-        return output_uris[0], output_uris[1], output_uris[2], output_uris[3], "✅ Separation successful!"
+        return output_paths[0], output_paths[1], output_paths[2], output_paths[3], "✅ Separation successful!"
 
     except Exception as e:
         print(f"Error: {e}")
@@ -92,5 +85,4 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
 
     gr.Markdown("---\n<p style='text-align: center; font-size: small;'>Powered by HT Demucs</p>")
 
-# ✅ Enable API for Next.js
 demo.launch(share=True)
