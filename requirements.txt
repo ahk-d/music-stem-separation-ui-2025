@@ -6,4 +6,5 @@ torchaudio
 gradio==3.50.2
 numpy>=1.21.0
 soundfile
-# Remove librosa to avoid numba compilation issues with Python 3.10
+numba==0.56.4
+# Use pre-compiled numba version to avoid compilation issues
