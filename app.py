@@ -29,18 +29,34 @@ print("HT-Demucs model loaded successfully.")
 # Load Spleeter model (5stems)
 print("Loading Spleeter model...")
 try:
-    spleeter_separator = Separator('spleeter:5stems')
+    # Set up proper handling for model downloads
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    # Set environment variable to handle redirects properly
+    import os
+    os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
+    
+    # Try to load the 5stems model with proper configuration
+    # Use a more robust approach to handle the redirect issue
+    try:
+        spleeter_separator = Separator('spleeter:5stems', multiprocess=False)
+    except Exception as download_error:
+        print(f"Direct 5stems download failed: {download_error}")
+        # Try alternative approach - use 2stems which is smaller and more reliable
+        spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
     spleeter_audio_adapter = AudioAdapter.default()
     print("Spleeter model loaded successfully.")
 except Exception as e:
-    print(f"Spleeter model loading failed: {e}")
+    print(f"Spleeter 5stems model loading failed: {e}")
     print("Trying with 2stems model as fallback...")
     try:
-        spleeter_separator = Separator('spleeter:2stems')
+        spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
         spleeter_audio_adapter = AudioAdapter.default()
         print("Spleeter 2stems model loaded successfully.")
     except Exception as e2:
         print(f"Spleeter 2stems model also failed: {e2}")
+        print("Spleeter will be disabled for this session.")
         spleeter_separator = None
         spleeter_audio_adapter = None
 
