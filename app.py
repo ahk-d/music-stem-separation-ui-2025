@@ -161,7 +161,7 @@ def separate_selected_models(audio_path, run_htdemucs, run_spleeter):
 
 # --- Gradio UI ---
 print("Creating Gradio interface...")
-with gr.Blocks(theme=gr.themes.Soft(), title="Music Stem Separator - HT-Demucs & Spleeter") as demo:
+with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
     # 🎵 Music Stem Separator - HT-Demucs & Spleeter Comparison
     
