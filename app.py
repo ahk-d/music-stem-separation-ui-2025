@@ -121,6 +121,9 @@ def separate_with_spleeter(audio_path):
                 if name in prediction:
                     out_path = os.path.join(output_dir, f"{name}.wav")
                     stem_audio = prediction[name]
+                    # Ensure audio is in the right format (2D array)
+                    if stem_audio.ndim == 1:
+                        stem_audio = stem_audio.reshape(1, -1)
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
                     output_paths.append(out_path)
                     print(f"✅ Spleeter saved {name} to {out_path}")
@@ -133,6 +136,9 @@ def separate_with_spleeter(audio_path):
                 if name in prediction:
                     out_path = os.path.join(output_dir, f"{name}.wav")
                     stem_audio = prediction[name]
+                    # Ensure audio is in the right format (2D array)
+                    if stem_audio.ndim == 1:
+                        stem_audio = stem_audio.reshape(1, -1)
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
                     output_paths.append(out_path)
                     print(f"✅ Spleeter saved {name} to {out_path}")
