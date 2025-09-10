@@ -29,9 +29,21 @@ print("HT-Demucs model loaded successfully.")
 
 # Load Spleeter model (5stems-16kHz)
 print("Loading Spleeter model...")
-spleeter_separator = Separator('spleeter:5stems-16kHz')
-spleeter_audio_adapter = AudioAdapter.default()
-print("Spleeter model loaded successfully.")
+try:
+    spleeter_separator = Separator('spleeter:5stems-16kHz')
+    spleeter_audio_adapter = AudioAdapter.default()
+    print("Spleeter model loaded successfully.")
+except Exception as e:
+    print(f"Spleeter model loading failed: {e}")
+    print("Trying with 2stems model as fallback...")
+    try:
+        spleeter_separator = Separator('spleeter:2stems-16kHz')
+        spleeter_audio_adapter = AudioAdapter.default()
+        print("Spleeter 2stems model loaded successfully.")
+    except Exception as e2:
+        print(f"Spleeter 2stems model also failed: {e2}")
+        spleeter_separator = None
+        spleeter_audio_adapter = None
 
 # --- HT-Demucs separation function ---
 def separate_with_htdemucs(audio_path):
@@ -93,6 +105,9 @@ def separate_with_spleeter(audio_path):
     if audio_path is None:
         return None, None, None, None, None, "Please upload an audio file."
 
+    if spleeter_separator is None or spleeter_audio_adapter is None:
+        return None, None, None, None, None, "❌ Spleeter model not loaded properly."
+
     try:
         print(f"Spleeter: Loading audio from: {audio_path}")
         
@@ -104,18 +119,40 @@ def separate_with_spleeter(audio_path):
         print("Spleeter: Separation complete.")
 
         # Save stems temporarily
-        stem_names = ["vocals", "drums", "bass", "other", "piano"]
         output_dir = "spleeter_stems"
         os.makedirs(output_dir, exist_ok=True)
 
         output_paths = []
-        for name in stem_names:
-            out_path = os.path.join(output_dir, f"{name}.wav")
-            # Convert to the right format and save
-            stem_audio = prediction[name]
-            spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
-            output_paths.append(out_path)
-            print(f"✅ Spleeter saved {name} to {out_path}")
+        
+        # Handle different model types (5stems vs 2stems)
+        if 'vocals' in prediction and 'drums' in prediction and 'bass' in prediction:
+            # 5stems model
+            stem_names = ["vocals", "drums", "bass", "other", "piano"]
+            for name in stem_names:
+                if name in prediction:
+                    out_path = os.path.join(output_dir, f"{name}.wav")
+                    stem_audio = prediction[name]
+                    spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
+                    output_paths.append(out_path)
+                    print(f"✅ Spleeter saved {name} to {out_path}")
+                else:
+                    output_paths.append(None)
+        else:
+            # 2stems model (vocals + accompaniment)
+            stem_names = ["vocals", "accompaniment"]
+            for name in stem_names:
+                if name in prediction:
+                    out_path = os.path.join(output_dir, f"{name}.wav")
+                    stem_audio = prediction[name]
+                    spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
+                    output_paths.append(out_path)
+                    print(f"✅ Spleeter saved {name} to {out_path}")
+                else:
+                    output_paths.append(None)
+            
+            # Fill remaining slots with None for 2stems model
+            while len(output_paths) < 5:
+                output_paths.append(None)
 
         return output_paths[0], output_paths[1], output_paths[2], output_paths[3], output_paths[4], "✅ Spleeter separation successful!"
 
@@ -221,6 +258,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 spleeter_other = gr.Audio(label="🎼 Other", type="filepath")
             with gr.Row():
                 spleeter_piano = gr.Audio(label="🎹 Piano", type="filepath")
+            
+            gr.Markdown("*Note: If only 2 stems are available, only Vocals and Accompaniment will be shown*")
 
     gr.Markdown("---")
     
