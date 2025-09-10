@@ -3,6 +3,6 @@ spleeter==2.4.2
 tensorflow==2.12.1
 torch
 torchaudio
-gradio==5.39.0
+gradio==4.44.0
 numpy
-# Force rebuild with correct TensorFlow version
+# Use Gradio 4.44.0 compatible with Spleeter httpx requirements
