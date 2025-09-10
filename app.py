@@ -307,7 +307,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     Upload your music and get stems from both **HT-Demucs** and **Spleeter** models!
     
     **HT-Demucs** provides: Drums, Bass, Other, Vocals  
-    **Spleeter** provides: Vocals, Drums, Bass, Other, **Piano** 🎹 (if 5stems model is available)
+    **Spleeter** provides: Vocals, Drums, Bass, Other, **Piano** 🎹 (5stems model)
     
     Compare the quality and choose the best stems for your needs!
     """)
