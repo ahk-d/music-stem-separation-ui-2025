@@ -1,1 +1,3 @@
 git+https://github.com/adefossez/demucs
+spleeter==2.3.2
+tensorflow==2.13.0
