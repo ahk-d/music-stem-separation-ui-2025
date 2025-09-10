@@ -6,5 +6,6 @@ torchaudio
 gradio==3.50.2
 numpy>=1.21.0
 soundfile
-numba==0.56.4
-# Use pre-compiled numba version to avoid compilation issues
+numba==0.55.2
+llvmlite==0.38.1
+# Use compatible numba and llvmlite versions for Spleeter
