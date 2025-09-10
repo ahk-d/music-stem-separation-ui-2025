@@ -1,10 +1,10 @@
 git+https://github.com/adefossez/demucs
-spleeter==2.1.0
-tensorflow==2.8.0
+spleeter==2.3.2
+tensorflow==2.13.0
 torch
 torchaudio
 gradio==3.50.2
-numpy
+numpy>=1.21.0
 librosa
 soundfile
-# Add audio processing libraries for better compatibility
+# Use newer versions compatible with Python 3.10
