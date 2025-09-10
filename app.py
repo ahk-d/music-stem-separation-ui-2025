@@ -13,6 +13,9 @@ from spleeter.audio.adapter import AudioAdapter
 import warnings
 import soundfile as sf
 import librosa
+import requests
+import tarfile
+import shutil
 warnings.filterwarnings("ignore")
 
 # --- Setup the models ---
