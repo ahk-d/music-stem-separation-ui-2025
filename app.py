@@ -26,17 +26,17 @@ htdemucs_model = htdemucs_model.to(device)
 htdemucs_model.eval()
 print("HT-Demucs model loaded successfully.")
 
-# Load Spleeter model (5stems-16kHz)
+# Load Spleeter model (5stems)
 print("Loading Spleeter model...")
 try:
-    spleeter_separator = Separator('spleeter:5stems-16kHz')
+    spleeter_separator = Separator('spleeter:5stems')
     spleeter_audio_adapter = AudioAdapter.default()
     print("Spleeter model loaded successfully.")
 except Exception as e:
     print(f"Spleeter model loading failed: {e}")
     print("Trying with 2stems model as fallback...")
     try:
-        spleeter_separator = Separator('spleeter:2stems-16kHz')
+        spleeter_separator = Separator('spleeter:2stems')
         spleeter_audio_adapter = AudioAdapter.default()
         print("Spleeter 2stems model loaded successfully.")
     except Exception as e2:
@@ -103,11 +103,8 @@ def separate_with_spleeter(audio_path):
     try:
         print(f"Spleeter: Loading audio from: {audio_path}")
         
-        # Load audio with Spleeter
-        waveform, _ = spleeter_audio_adapter.load(audio_path)
-        
         print("Spleeter: Applying the separation model...")
-        prediction = spleeter_separator.separate(waveform)
+        prediction = spleeter_separator.separate(audio_path)
         print("Spleeter: Separation complete.")
 
         # Save stems temporarily
