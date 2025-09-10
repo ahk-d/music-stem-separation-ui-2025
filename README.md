@@ -8,7 +8,7 @@ sdk_version: 5.39.0
 app_file: app.py
 pinned: false
 license: mit
-short_description: HT-Demucs and Spleeter AI music stem separation - separate vocals, drums, bass, piano, other instruments
+short_description: HT-Demucs & Spleeter AI music stem separation tool
 tags:
   - music
   - audio
