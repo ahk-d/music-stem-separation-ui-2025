@@ -44,7 +44,12 @@ try:
     except Exception as download_error:
         print(f"Direct 5stems download failed: {download_error}")
         # Try alternative approach - use 2stems which is smaller and more reliable
-        spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
+        try:
+            spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
+        except Exception as download_error2:
+            print(f"2stems download also failed: {download_error2}")
+            # Try with different configuration
+            spleeter_separator = Separator('spleeter:2stems-16kHz', multiprocess=False)
     spleeter_audio_adapter = AudioAdapter.default()
     print("Spleeter model loaded successfully.")
 except Exception as e:
@@ -121,13 +126,36 @@ def separate_with_spleeter(audio_path):
         
         print("Spleeter: Applying the separation model...")
         # Spleeter's separate method expects a file path, not a waveform
-        prediction = spleeter_separator.separate(audio_path)
-        print("Spleeter: Separation complete.")
-        print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
-        
-        # Debug: Check the shape of the first prediction
-        first_key = list(prediction.keys())[0]
-        print(f"Spleeter: Shape of {first_key}: {prediction[first_key].shape}")
+        try:
+            prediction = spleeter_separator.separate(audio_path)
+            print("Spleeter: Separation complete.")
+            print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
+            
+            # Debug: Check the shape of the first prediction
+            first_key = list(prediction.keys())[0]
+            print(f"Spleeter: Shape of {first_key}: {prediction[first_key].shape}")
+        except Exception as sep_error:
+            print(f"Spleeter separation failed: {sep_error}")
+            print(f"Spleeter separation error type: {type(sep_error)}")
+            # Try alternative approach - load audio manually and separate
+            print("Spleeter: Trying alternative approach...")
+            try:
+                waveform, sample_rate = spleeter_audio_adapter.load(audio_path)
+                print(f"Spleeter: Loaded audio manually - shape: {waveform.shape}, sr: {sample_rate}")
+                
+                # Ensure waveform is in the right format
+                if waveform.ndim == 1:
+                    waveform = waveform.reshape(1, -1)
+                elif waveform.ndim == 3:
+                    waveform = waveform.squeeze()
+                
+                print(f"Spleeter: Processed waveform shape: {waveform.shape}")
+                prediction = spleeter_separator.separate(waveform)
+                print("Spleeter: Alternative separation complete.")
+                print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
+            except Exception as alt_error:
+                print(f"Spleeter alternative approach also failed: {alt_error}")
+                raise sep_error  # Re-raise the original error
 
         # Save stems temporarily
         output_dir = "spleeter_stems"
