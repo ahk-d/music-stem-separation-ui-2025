@@ -11,6 +11,8 @@ import numpy as np
 from spleeter.separator import Separator
 from spleeter.audio.adapter import AudioAdapter
 import warnings
+import librosa
+import soundfile as sf
 warnings.filterwarnings("ignore")
 
 # --- Setup the models ---
@@ -42,7 +44,16 @@ def separate_with_htdemucs(audio_path):
 
     try:
         print(f"HT-Demucs: Loading audio from: {audio_path}")
-        wav, sr = torchaudio.load(audio_path)
+        
+        # Try torchaudio first, fallback to librosa if it fails
+        try:
+            wav, sr = torchaudio.load(audio_path)
+        except Exception as e:
+            print(f"Torchaudio failed, trying librosa: {e}")
+            wav, sr = librosa.load(audio_path, sr=44100, mono=False)
+            if wav.ndim == 1:
+                wav = wav.reshape(1, -1)
+            wav = torch.from_numpy(wav).float()
 
         if wav.shape[0] == 1:
             print("Audio is mono, converting to stereo.")

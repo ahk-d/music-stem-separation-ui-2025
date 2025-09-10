@@ -5,4 +5,6 @@ torch
 torchaudio
 gradio==3.50.2
 numpy
-# Use older versions for better compatibility
+librosa
+soundfile
+# Add audio processing libraries for better compatibility
