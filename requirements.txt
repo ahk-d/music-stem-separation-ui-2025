@@ -1,6 +1,6 @@
 git+https://github.com/adefossez/demucs
 spleeter==2.4.2
-tensorflow==2.13.0
+tensorflow==2.12.1
 torch
 torchaudio
 gradio==5.39.0
