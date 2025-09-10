@@ -37,19 +37,22 @@ try:
     import os
     os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
     
-    # Try to load the 5stems model with proper configuration
+    # Try to load the 2stems model first (more reliable)
     # Use a more robust approach to handle the redirect issue
     try:
-        spleeter_separator = Separator('spleeter:5stems', multiprocess=False)
+        spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
+        print("Spleeter: Using 2stems model (vocals + accompaniment)")
     except Exception as download_error:
-        print(f"Direct 5stems download failed: {download_error}")
-        # Try alternative approach - use 2stems which is smaller and more reliable
+        print(f"2stems download failed: {download_error}")
+        # Try alternative approach - use 5stems as fallback
         try:
-            spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
+            spleeter_separator = Separator('spleeter:5stems', multiprocess=False)
+            print("Spleeter: Using 5stems model (vocals, drums, bass, other, piano)")
         except Exception as download_error2:
-            print(f"2stems download also failed: {download_error2}")
+            print(f"5stems download also failed: {download_error2}")
             # Try with different configuration
             spleeter_separator = Separator('spleeter:2stems-16kHz', multiprocess=False)
+            print("Spleeter: Using 2stems-16kHz model")
     spleeter_audio_adapter = AudioAdapter.default()
     print("Spleeter model loaded successfully.")
 except Exception as e:
@@ -124,10 +127,24 @@ def separate_with_spleeter(audio_path):
     try:
         print(f"Spleeter: Loading audio from: {audio_path}")
         
+        # Load audio and convert to mono if needed
+        waveform, sample_rate = spleeter_audio_adapter.load(audio_path)
+        print(f"Spleeter: Loaded audio - shape: {waveform.shape}, sr: {sample_rate}")
+        
+        # Convert stereo to mono if needed
+        if waveform.ndim == 2 and waveform.shape[0] == 2:
+            print("Spleeter: Converting stereo to mono")
+            waveform = waveform.mean(axis=0)  # Average the two channels
+            print(f"Spleeter: Converted to mono - shape: {waveform.shape}")
+        elif waveform.ndim == 1:
+            print("Spleeter: Audio is already mono")
+        else:
+            print(f"Spleeter: Unexpected audio shape: {waveform.shape}")
+        
         print("Spleeter: Applying the separation model...")
-        # Spleeter's separate method expects a file path, not a waveform
+        # Spleeter's separate method can work with waveforms
         try:
-            prediction = spleeter_separator.separate(audio_path)
+            prediction = spleeter_separator.separate(waveform)
             print("Spleeter: Separation complete.")
             print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
             
@@ -137,25 +154,11 @@ def separate_with_spleeter(audio_path):
         except Exception as sep_error:
             print(f"Spleeter separation failed: {sep_error}")
             print(f"Spleeter separation error type: {type(sep_error)}")
-            # Try alternative approach - load audio manually and separate
-            print("Spleeter: Trying alternative approach...")
-            try:
-                waveform, sample_rate = spleeter_audio_adapter.load(audio_path)
-                print(f"Spleeter: Loaded audio manually - shape: {waveform.shape}, sr: {sample_rate}")
-                
-                # Ensure waveform is in the right format
-                if waveform.ndim == 1:
-                    waveform = waveform.reshape(1, -1)
-                elif waveform.ndim == 3:
-                    waveform = waveform.squeeze()
-                
-                print(f"Spleeter: Processed waveform shape: {waveform.shape}")
-                prediction = spleeter_separator.separate(waveform)
-                print("Spleeter: Alternative separation complete.")
-                print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
-            except Exception as alt_error:
-                print(f"Spleeter alternative approach also failed: {alt_error}")
-                raise sep_error  # Re-raise the original error
+            # Try with file path instead
+            print("Spleeter: Trying with file path approach...")
+            prediction = spleeter_separator.separate(audio_path)
+            print("Spleeter: File path separation complete.")
+            print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
 
         # Save stems temporarily
         output_dir = "spleeter_stems"
@@ -177,11 +180,16 @@ def separate_with_spleeter(audio_path):
                     
                     # Ensure audio is in the right format (2D array: channels x samples)
                     if stem_audio.ndim == 1:
-                        print(f"Spleeter: Reshaping 1D {name} audio to 2D")
+                        print(f"Spleeter: Reshaping 1D {name} audio to 2D (mono)")
                         stem_audio = stem_audio.reshape(1, -1)
                     elif stem_audio.ndim == 3:
                         print(f"Spleeter: Reshaping 3D {name} audio to 2D")
                         stem_audio = stem_audio.squeeze()
+                    elif stem_audio.ndim == 2 and stem_audio.shape[0] == 1:
+                        print(f"Spleeter: {name} audio is already in correct mono format")
+                    elif stem_audio.ndim == 2 and stem_audio.shape[0] == 2:
+                        print(f"Spleeter: Converting stereo {name} to mono")
+                        stem_audio = stem_audio.mean(axis=0).reshape(1, -1)
                     
                     print(f"Spleeter: Final {name} audio shape: {stem_audio.shape}")
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
@@ -202,11 +210,16 @@ def separate_with_spleeter(audio_path):
                     
                     # Ensure audio is in the right format (2D array: channels x samples)
                     if stem_audio.ndim == 1:
-                        print(f"Spleeter: Reshaping 1D {name} audio to 2D")
+                        print(f"Spleeter: Reshaping 1D {name} audio to 2D (mono)")
                         stem_audio = stem_audio.reshape(1, -1)
                     elif stem_audio.ndim == 3:
                         print(f"Spleeter: Reshaping 3D {name} audio to 2D")
                         stem_audio = stem_audio.squeeze()
+                    elif stem_audio.ndim == 2 and stem_audio.shape[0] == 1:
+                        print(f"Spleeter: {name} audio is already in correct mono format")
+                    elif stem_audio.ndim == 2 and stem_audio.shape[0] == 2:
+                        print(f"Spleeter: Converting stereo {name} to mono")
+                        stem_audio = stem_audio.mean(axis=0).reshape(1, -1)
                     
                     print(f"Spleeter: Final {name} audio shape: {stem_audio.shape}")
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
@@ -300,7 +313,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             status_output = gr.Textbox(label="📊 Status", interactive=False, lines=4)
 
     gr.Markdown("---")
-    
+
     with gr.Row():
         # HT-Demucs Results
         with gr.Column():
@@ -365,4 +378,4 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     """)
 
 if __name__ == "__main__":
-    demo.launch(share=True)
+demo.launch(share=True)
