@@ -1,8 +1,8 @@
 git+https://github.com/adefossez/demucs
-spleeter==2.4.2
-tensorflow==2.12.1
+spleeter==2.1.0
+tensorflow==2.8.0
 torch
 torchaudio
 gradio==3.50.2
 numpy
-# Use Gradio 3.50.2 compatible with Spleeter httpx<0.20.0 requirements
+# Use older versions for better compatibility
