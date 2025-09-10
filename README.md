@@ -1,29 +1,3 @@
----
-title: HT-Demucs Spleeter Music Stem Separation - AI Audio Source Separation 2025
-emoji: 🎵
-colorFrom: blue
-colorTo: purple
-sdk: gradio
-sdk_version: 5.39.0
-app_file: app.py
-pinned: false
-license: mit
-short_description: HT-Demucs & Spleeter AI music stem separation tool
-tags:
-  - music
-  - audio
-  - stem-separation
-  - htdemucs
-  - spleeter
-  - ai
-  - machine-learning
-  - vocals
-  - drums
-  - bass
-  - piano
-  - audio-processing
----
-
 # 🎵 HT-Demucs Spleeter Music Stem Separation - AI Audio Source Separation
 
 A powerful AI-powered music stem separation tool that runs both **HT-Demucs** and **Spleeter** models. Choose which models to run or compare both simultaneously to get the best quality stems for vocals, drums, bass, piano, and other instruments.
