@@ -143,9 +143,19 @@ def separate_with_spleeter(audio_path):
                 if name in prediction:
                     out_path = os.path.join(output_dir, f"{name}.wav")
                     stem_audio = prediction[name]
-                    # Ensure audio is in the right format (2D array)
+                    
+                    # Debug: Print audio shape and type
+                    print(f"Spleeter: {name} audio shape: {stem_audio.shape}, ndim: {stem_audio.ndim}, dtype: {stem_audio.dtype}")
+                    
+                    # Ensure audio is in the right format (2D array: channels x samples)
                     if stem_audio.ndim == 1:
+                        print(f"Spleeter: Reshaping 1D {name} audio to 2D")
                         stem_audio = stem_audio.reshape(1, -1)
+                    elif stem_audio.ndim == 3:
+                        print(f"Spleeter: Reshaping 3D {name} audio to 2D")
+                        stem_audio = stem_audio.squeeze()
+                    
+                    print(f"Spleeter: Final {name} audio shape: {stem_audio.shape}")
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
                     output_paths.append(out_path)
                     print(f"✅ Spleeter saved {name} to {out_path}")
@@ -158,9 +168,19 @@ def separate_with_spleeter(audio_path):
                 if name in prediction:
                     out_path = os.path.join(output_dir, f"{name}.wav")
                     stem_audio = prediction[name]
-                    # Ensure audio is in the right format (2D array)
+                    
+                    # Debug: Print audio shape and type
+                    print(f"Spleeter: {name} audio shape: {stem_audio.shape}, ndim: {stem_audio.ndim}, dtype: {stem_audio.dtype}")
+                    
+                    # Ensure audio is in the right format (2D array: channels x samples)
                     if stem_audio.ndim == 1:
+                        print(f"Spleeter: Reshaping 1D {name} audio to 2D")
                         stem_audio = stem_audio.reshape(1, -1)
+                    elif stem_audio.ndim == 3:
+                        print(f"Spleeter: Reshaping 3D {name} audio to 2D")
+                        stem_audio = stem_audio.squeeze()
+                    
+                    print(f"Spleeter: Final {name} audio shape: {stem_audio.shape}")
                     spleeter_audio_adapter.save(out_path, stem_audio, 44100, 'wav', '16')
                     output_paths.append(out_path)
                     print(f"✅ Spleeter saved {name} to {out_path}")
