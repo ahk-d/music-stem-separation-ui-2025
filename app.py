@@ -37,19 +37,19 @@ try:
     import os
     os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
     
-    # Try to load the 2stems model first (more reliable)
+    # Try to load the 5stems model first (as requested)
     # Use a more robust approach to handle the redirect issue
     try:
-        spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
-        print("Spleeter: Using 2stems model (vocals + accompaniment)")
+        spleeter_separator = Separator('spleeter:5stems', multiprocess=False)
+        print("Spleeter: Using 5stems model (vocals, drums, bass, other, piano)")
     except Exception as download_error:
-        print(f"2stems download failed: {download_error}")
-        # Try alternative approach - use 5stems as fallback
+        print(f"5stems download failed: {download_error}")
+        # Try alternative approach - use 2stems as fallback
         try:
-            spleeter_separator = Separator('spleeter:5stems', multiprocess=False)
-            print("Spleeter: Using 5stems model (vocals, drums, bass, other, piano)")
+            spleeter_separator = Separator('spleeter:2stems', multiprocess=False)
+            print("Spleeter: Using 2stems model (vocals + accompaniment)")
         except Exception as download_error2:
-            print(f"5stems download also failed: {download_error2}")
+            print(f"2stems download also failed: {download_error2}")
             # Try with different configuration
             spleeter_separator = Separator('spleeter:2stems-16kHz', multiprocess=False)
             print("Spleeter: Using 2stems-16kHz model")
@@ -378,4 +378,4 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     """)
 
 if __name__ == "__main__":
-demo.launch(share=True)
+    demo.launch(share=True)
