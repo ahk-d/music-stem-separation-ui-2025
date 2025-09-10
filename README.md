@@ -1,3 +1,16 @@
+---
+title: {{title}}
+emoji: {{emoji}}
+colorFrom: {{colorFrom}}
+colorTo: {{colorTo}}
+sdk: {{sdk}}
+sdk_version: "{{sdkVersion}}"
+app_file: app.py
+pinned: false
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+
 # 🎵 HT-Demucs Spleeter Music Stem Separation - AI Audio Source Separation
 
 A powerful AI-powered music stem separation tool that runs both **HT-Demucs** and **Spleeter** models. Choose which models to run or compare both simultaneously to get the best quality stems for vocals, drums, bass, piano, and other instruments.
