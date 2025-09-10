@@ -1,10 +1,10 @@
 ---
-title: {{title}}
-emoji: {{emoji}}
-colorFrom: {{colorFrom}}
-colorTo: {{colorTo}}
-sdk: {{sdk}}
-sdk_version: "{{sdkVersion}}"
+title: HT-Demucs Spleeter Music Stem Separation - AI Audio Source Separation 2025
+emoji: 🎵
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: "5.39.0"
 app_file: app.py
 pinned: false
 ---
