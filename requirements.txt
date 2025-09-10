@@ -5,3 +5,4 @@ torch
 torchaudio
 gradio==5.39.0
 numpy
+# Force rebuild with correct TensorFlow version
