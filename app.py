@@ -103,9 +103,18 @@ def separate_with_spleeter(audio_path):
     try:
         print(f"Spleeter: Loading audio from: {audio_path}")
         
+        # Load audio with Spleeter's audio adapter
+        waveform, sample_rate = spleeter_audio_adapter.load(audio_path)
+        print(f"Spleeter: Loaded audio with shape {waveform.shape}, sample rate {sample_rate}")
+        
         print("Spleeter: Applying the separation model...")
-        prediction = spleeter_separator.separate(audio_path)
+        prediction = spleeter_separator.separate(waveform)
         print("Spleeter: Separation complete.")
+        print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
+        
+        # Debug: Check the shape of the first prediction
+        first_key = list(prediction.keys())[0]
+        print(f"Spleeter: Shape of {first_key}: {prediction[first_key].shape}")
 
         # Save stems temporarily
         output_dir = "spleeter_stems"
