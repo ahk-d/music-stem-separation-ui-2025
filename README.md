@@ -1,3 +1,4 @@
+<img width="1635" height="1073" alt="image" src="https://github.com/user-attachments/assets/36b12e56-6a77-4e59-af4d-222744c90c31" />
 ---
 title: HT-Demucs Spleeter Music Stem Separation - AI Audio Source Separation 2025
 emoji: 🎵
