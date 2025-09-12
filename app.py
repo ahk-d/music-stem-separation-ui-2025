@@ -50,9 +50,9 @@ def patch_spleeter_redirects():
             
             print(f"Downloading {name} model with redirect handling...")
             
-            # Model URLs
+            # Model URLs - only 5stems
             model_urls = {
-                '5stems': 'https://github.com/deezer/spleeter/releases/download/v1.4.0/5stems.tar.gz',
+                '5stems': 'https://github.com/deezer/spleeter/releases/download/v1.4.0/5stems.tar.gz'
             }
             
             if name not in model_urls:
@@ -98,7 +98,7 @@ def patch_spleeter_redirects():
         return False
 
 def setup_spleeter_with_retry():
-    """Setup Spleeter with retry logic for model download"""
+    """Setup Spleeter 5stems model only"""
     global spleeter_separator, spleeter_audio_adapter, spleeter_available
     
     try:
@@ -112,32 +112,16 @@ def setup_spleeter_with_retry():
         # Set environment variables to help with model download
         os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
         
-        # Try to create the separator with retry logic
+        # Create the 5stems separator
         print("Creating Spleeter 5stems separator...")
-        
-        # First try with 5stems
-        try:
-            spleeter_separator = Separator('spleeter:5stems')
-            spleeter_audio_adapter = AudioAdapter.default()
-            spleeter_available = True
-            print("✅ Spleeter 5stems model loaded successfully!")
-            return True
-        except Exception as e:
-            print(f"5stems model failed, trying 4stems: {e}")
-            
-            # Fallback to 4stems if 5stems fails
-            try:
-                spleeter_separator = Separator('spleeter:4stems')
-                spleeter_audio_adapter = AudioAdapter.default()
-                spleeter_available = True
-                print("✅ Spleeter 4stems model loaded successfully!")
-                return True
-            except Exception as e2:
-                print(f"4stems model also failed: {e2}")
-                return False
+        spleeter_separator = Separator('spleeter:5stems')
+        spleeter_audio_adapter = AudioAdapter.default()
+        spleeter_available = True
+        print("✅ Spleeter 5stems model loaded successfully!")
+        return True
                 
     except Exception as e:
-        print(f"❌ Failed to load Spleeter: {e}")
+        print(f"❌ Failed to load Spleeter 5stems: {e}")
         spleeter_separator = None
         spleeter_audio_adapter = None
         spleeter_available = False
@@ -240,7 +224,7 @@ def separate_with_spleeter(audio_path):
                 output_paths.append(out_path)
                 print(f"✅ Spleeter saved {stem_name} to {out_path}")
             else:
-                print(f"⚠️ Warning: {stem_name} not found in prediction (using 4stems model?)")
+                print(f"⚠️ Warning: {stem_name} not found in prediction")
                 output_paths.append(None)
         
         # Ensure we have 5 outputs
