@@ -12,8 +12,6 @@ import warnings
 import soundfile as sf
 import librosa
 import time
-import subprocess
-import shutil
 warnings.filterwarnings("ignore")
 
 # --- Setup the models ---
@@ -28,29 +26,28 @@ htdemucs_model = htdemucs_model.to(device)
 htdemucs_model.eval()
 print("HT-Demucs model loaded successfully.")
 
-# Setup Spleeter with command-line approach
+# Setup Spleeter with Python API approach
 print("Setting up Spleeter...")
+spleeter_separator = None
+spleeter_audio_adapter = None
 spleeter_available = False
 
-def check_spleeter_installation():
-    """Check if Spleeter is installed and available via command line"""
-    try:
-        result = subprocess.run(['spleeter', '--help'], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print("✅ Spleeter command-line tool is available!")
-            return True
-        else:
-            print(f"❌ Spleeter command failed: {result.stderr}")
-            return False
-    except FileNotFoundError:
-        print("❌ Spleeter command not found. Please install Spleeter.")
-        return False
-    except Exception as e:
-        print(f"❌ Error checking Spleeter: {e}")
-        return False
-
-spleeter_available = check_spleeter_installation()
+try:
+    from spleeter.separator import Separator
+    from spleeter.audio.adapter import AudioAdapter
+    
+    # Initialize Spleeter separator for 5stems model
+    print("Creating Spleeter 5stems separator...")
+    spleeter_separator = Separator('spleeter:5stems')
+    spleeter_audio_adapter = AudioAdapter.default()
+    spleeter_available = True
+    print("✅ Spleeter 5stems model loaded successfully!")
+    
+except Exception as e:
+    print(f"❌ Failed to load Spleeter: {e}")
+    spleeter_separator = None
+    spleeter_audio_adapter = None
+    spleeter_available = False
 
 # --- HT-Demucs separation function ---
 def separate_with_htdemucs(audio_path):
@@ -102,13 +99,13 @@ def separate_with_htdemucs(audio_path):
 def separate_with_spleeter(audio_path):
     """
     Separates an audio file using Spleeter into vocals, drums, bass, other, and piano.
-    Uses command-line execution for reliability.
+    Uses Python API approach from stem_separation_spleeter.py
     Returns FILE PATHS.
     """
     if audio_path is None:
         return None, None, None, None, None, "Please upload an audio file."
 
-    if not spleeter_available:
+    if not spleeter_available or spleeter_separator is None or spleeter_audio_adapter is None:
         return None, None, None, None, None, "❌ Spleeter not available. Please install Spleeter."
 
     try:
@@ -119,62 +116,42 @@ def separate_with_spleeter(audio_path):
         output_dir = f"spleeter_stems_{timestamp}"
         os.makedirs(output_dir, exist_ok=True)
         
-        # Run Spleeter command-line tool
-        cmd = [
-            'spleeter', 'separate',
-            '-i', audio_path,
-            '-o', output_dir,
-            '-p', 'spleeter:5stems-16kHz'
-        ]
+        # Load audio using Spleeter's audio adapter (from stem_separation_spleeter.py)
+        print("Spleeter: Loading audio...")
+        waveform, sample_rate = spleeter_audio_adapter.load(audio_path, sample_rate=44100)
+        print(f"Spleeter: Loaded audio - shape: {waveform.shape}, sr: {sample_rate}")
         
-        print(f"Spleeter: Running command: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        
-        if result.returncode != 0:
-            print(f"Spleeter command failed: {result.stderr}")
-            return None, None, None, None, None, f"❌ Spleeter command failed: {result.stderr}"
-        
+        # Perform the separation (from stem_separation_spleeter.py)
+        print("Spleeter: Separating audio sources...")
+        prediction = spleeter_separator.separate(waveform)
         print("Spleeter: Separation complete.")
+        print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
         
-        # Find the separated files
-        # Spleeter creates a subdirectory with the input filename
-        input_filename = os.path.splitext(os.path.basename(audio_path))[0]
-        spleeter_output_dir = os.path.join(output_dir, input_filename)
-        
-        if not os.path.exists(spleeter_output_dir):
-            print(f"Expected output directory not found: {spleeter_output_dir}")
-            return None, None, None, None, None, "❌ Spleeter output directory not found"
-        
-        # Map Spleeter output files to our expected order
-        stem_mapping = {
-            "vocals": "vocals.wav",
-            "drums": "drums.wav", 
-            "bass": "bass.wav",
-            "other": "other.wav",
-            "piano": "piano.wav"
-        }
-        
+        # Save stems with timestamp
         output_paths = []
-        for stem_name, filename in stem_mapping.items():
-            source_path = os.path.join(spleeter_output_dir, filename)
-            if os.path.exists(source_path):
-                # Copy to our timestamped directory for consistency
-                dest_path = os.path.join(output_dir, f"{stem_name}_{timestamp}.wav")
-                shutil.copy2(source_path, dest_path)
-                output_paths.append(dest_path)
-                print(f"✅ Spleeter saved {stem_name} to {dest_path}")
+        stem_names = ["vocals", "drums", "bass", "other", "piano"]
+        
+        for stem_name in stem_names:
+            if stem_name in prediction:
+                out_path = os.path.join(output_dir, f"{stem_name}_{timestamp}.wav")
+                stem_audio = prediction[stem_name]
+                
+                print(f"Spleeter: {stem_name} audio shape: {stem_audio.shape}, dtype: {stem_audio.dtype}")
+                
+                # Save using soundfile for better compatibility
+                sf.write(out_path, stem_audio, sample_rate)
+                output_paths.append(out_path)
+                print(f"✅ Spleeter saved {stem_name} to {out_path}")
             else:
-                print(f"⚠️ Warning: {stem_name} file not found: {source_path}")
+                print(f"⚠️ Warning: {stem_name} not found in prediction")
                 output_paths.append(None)
         
-        # Clean up the intermediate directory
-        if os.path.exists(spleeter_output_dir):
-            shutil.rmtree(spleeter_output_dir)
-        
+        # Ensure we have 5 outputs
+        while len(output_paths) < 5:
+            output_paths.append(None)
+
         return output_paths[0], output_paths[1], output_paths[2], output_paths[3], output_paths[4], "✅ Spleeter separation successful!"
 
-    except subprocess.TimeoutExpired:
-        return None, None, None, None, None, "❌ Spleeter separation timed out (5 minutes)"
     except Exception as e:
         print(f"Spleeter Error: {e}")
         import traceback
