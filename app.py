@@ -292,14 +292,9 @@ def separate_selected_models(audio_path, run_htdemucs, run_spleeter):
 print("Creating Gradio interface...")
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
-    # 🎵 Music Stem Separator - HT-Demucs & Spleeter 2025
+    # 🎵 Spleeter & Demucs - Now Both Work!
     
-    Upload your music and get stems from both **HT-Demucs** and **Spleeter** models!
-    
-    **HT-Demucs** provides: Drums, Bass, Other, Vocals  
-    **Spleeter 2025** provides: Vocals, Drums, Bass, Other, **Piano** 🎹 (5stems model)
-    
-    Compare the quality and choose the best stems for your needs!
+    **Follow me on:** [🤗 Hugging Face @ahk-d](https://huggingface.co/ahk-d) | [🐙 GitHub @ahk-d](https://github.com/ahk-d)
     """)
 
     with gr.Row():
@@ -311,7 +306,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             with gr.Row():
                 htdemucs_toggle = gr.Checkbox(label="🎯 HT-Demucs", value=True, info="Drums, Bass, Other, Vocals")
                 spleeter_label = "🎵 Spleeter 2025 (5stems)" if spleeter_available else "🎵 Spleeter 2025"
-                spleeter_info = "Vocals, Drums, Bass, Other, Piano" if spleeter_available else "Not available"
+                spleeter_info = "Vocals, Drums, Bass, Other, Piano" if spleeter_available else "5stems model not available"
                 spleeter_toggle = gr.Checkbox(
                     label=spleeter_label, 
                     value=spleeter_available, 
