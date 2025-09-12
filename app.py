@@ -32,22 +32,119 @@ spleeter_separator = None
 spleeter_audio_adapter = None
 spleeter_available = False
 
-try:
-    from spleeter.separator import Separator
-    from spleeter.audio.adapter import AudioAdapter
+def patch_spleeter_redirects():
+    """Patch Spleeter to handle GitHub redirects properly"""
+    try:
+        import httpx
+        from spleeter.model.provider.github import GithubModelProvider
+        
+        # Store the original download method
+        original_download = GithubModelProvider.download
+        
+        def patched_download(self, name, model_directory):
+            """Patched download method that handles redirects"""
+            import os
+            import tarfile
+            import tempfile
+            from urllib.parse import urlparse
+            
+            print(f"Downloading {name} model with redirect handling...")
+            
+            # Model URLs
+            model_urls = {
+                '5stems': 'https://github.com/deezer/spleeter/releases/download/v1.4.0/5stems.tar.gz',
+            }
+            
+            if name not in model_urls:
+                return original_download(self, name, model_directory)
+            
+            url = model_urls[name]
+            
+            try:
+                # Create a session that follows redirects
+                with httpx.Client(follow_redirects=True, timeout=300) as client:
+                    print(f"Downloading from: {url}")
+                    response = client.get(url)
+                    response.raise_for_status()
+                    
+                    # Save to temporary file
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp_file:
+                        tmp_file.write(response.content)
+                        tmp_file_path = tmp_file.name
+                    
+                    print(f"Downloaded {len(response.content)} bytes")
+                    
+                    # Extract the model
+                    os.makedirs(model_directory, exist_ok=True)
+                    with tarfile.open(tmp_file_path, 'r:gz') as tar:
+                        tar.extractall(model_directory)
+                    
+                    # Clean up
+                    os.unlink(tmp_file_path)
+                    print(f"✅ Successfully downloaded and extracted {name} model")
+                    
+            except Exception as e:
+                print(f"❌ Failed to download {name} model: {e}")
+                # Fallback to original method
+                return original_download(self, name, model_directory)
+        
+        # Apply the patch
+        GithubModelProvider.download = patched_download
+        print("✅ Patched Spleeter to handle GitHub redirects")
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Could not patch Spleeter redirects: {e}")
+        return False
+
+def setup_spleeter_with_retry():
+    """Setup Spleeter with retry logic for model download"""
+    global spleeter_separator, spleeter_audio_adapter, spleeter_available
     
-    # Initialize Spleeter separator for 5stems model
-    print("Creating Spleeter 5stems separator...")
-    spleeter_separator = Separator('spleeter:5stems')
-    spleeter_audio_adapter = AudioAdapter.default()
-    spleeter_available = True
-    print("✅ Spleeter 5stems model loaded successfully!")
-    
-except Exception as e:
-    print(f"❌ Failed to load Spleeter: {e}")
-    spleeter_separator = None
-    spleeter_audio_adapter = None
-    spleeter_available = False
+    try:
+        from spleeter.separator import Separator
+        from spleeter.audio.adapter import AudioAdapter
+        import os
+        
+        # Patch Spleeter to handle redirects
+        patch_spleeter_redirects()
+        
+        # Set environment variables to help with model download
+        os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
+        
+        # Try to create the separator with retry logic
+        print("Creating Spleeter 5stems separator...")
+        
+        # First try with 5stems
+        try:
+            spleeter_separator = Separator('spleeter:5stems')
+            spleeter_audio_adapter = AudioAdapter.default()
+            spleeter_available = True
+            print("✅ Spleeter 5stems model loaded successfully!")
+            return True
+        except Exception as e:
+            print(f"5stems model failed, trying 4stems: {e}")
+            
+            # Fallback to 4stems if 5stems fails
+            try:
+                spleeter_separator = Separator('spleeter:4stems')
+                spleeter_audio_adapter = AudioAdapter.default()
+                spleeter_available = True
+                print("✅ Spleeter 4stems model loaded successfully!")
+                return True
+            except Exception as e2:
+                print(f"4stems model also failed: {e2}")
+                return False
+                
+    except Exception as e:
+        print(f"❌ Failed to load Spleeter: {e}")
+        spleeter_separator = None
+        spleeter_audio_adapter = None
+        spleeter_available = False
+        return False
+
+# Try to setup Spleeter
+setup_spleeter_with_retry()
 
 # --- HT-Demucs separation function ---
 def separate_with_htdemucs(audio_path):
@@ -143,7 +240,7 @@ def separate_with_spleeter(audio_path):
                 output_paths.append(out_path)
                 print(f"✅ Spleeter saved {stem_name} to {out_path}")
             else:
-                print(f"⚠️ Warning: {stem_name} not found in prediction")
+                print(f"⚠️ Warning: {stem_name} not found in prediction (using 4stems model?)")
                 output_paths.append(None)
         
         # Ensure we have 5 outputs
@@ -229,10 +326,12 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             gr.Markdown("### 🎛️ Select Models to Run")
             with gr.Row():
                 htdemucs_toggle = gr.Checkbox(label="🎯 HT-Demucs", value=True, info="Drums, Bass, Other, Vocals")
+                spleeter_label = "🎵 Spleeter 2025 (5stems)" if spleeter_available else "🎵 Spleeter 2025"
+                spleeter_info = "Vocals, Drums, Bass, Other, Piano" if spleeter_available else "Not available"
                 spleeter_toggle = gr.Checkbox(
-                    label="🎵 Spleeter 2025 (5stems)", 
+                    label=spleeter_label, 
                     value=spleeter_available, 
-                    info="Vocals, Drums, Bass, Other, Piano" if spleeter_available else "Not available",
+                    info=spleeter_info,
                     interactive=spleeter_available
                 )
             
