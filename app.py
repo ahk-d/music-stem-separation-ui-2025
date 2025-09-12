@@ -8,13 +8,11 @@ from demucs.apply import apply_model
 import os
 import tempfile
 import numpy as np
-from spleeter.separator import Separator
-from spleeter.audio.adapter import AudioAdapter
 import warnings
 import soundfile as sf
 import librosa
-import requests
-import tarfile
+import time
+import subprocess
 import shutil
 warnings.filterwarnings("ignore")
 
@@ -30,73 +28,29 @@ htdemucs_model = htdemucs_model.to(device)
 htdemucs_model.eval()
 print("HT-Demucs model loaded successfully.")
 
-# Load Spleeter model with better error handling
-print("Loading Spleeter model...")
-spleeter_separator = None
-spleeter_audio_adapter = None
+# Setup Spleeter with command-line approach
+print("Setting up Spleeter...")
+spleeter_available = False
 
-try:
-    # Set up environment variables for better model handling
-    os.environ['SPLEETER_MODEL_PATH'] = '/tmp/spleeter_models'
-    os.makedirs('/tmp/spleeter_models', exist_ok=True)
-    
-    # Try different approaches to handle the redirect issue
-    import ssl
-    import urllib.request
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
-    # Create unverified SSL context to handle redirects
-    ssl._create_default_https_context = ssl._create_unverified_context
-    
+def check_spleeter_installation():
+    """Check if Spleeter is installed and available via command line"""
     try:
-        print("Attempting to load 5stems model...")
-        # Try with specific configuration to handle redirects
-        spleeter_separator = Separator(
-            'spleeter:5stems', 
-            multiprocess=False,
-            stft_backend='tensorflow'
-        )
-        spleeter_model_type = "5stems"
-        print("Spleeter: Using 5stems model (vocals, drums, bass, other, piano)")
-    except Exception as e5:
-        print(f"5stems model failed: {e5}")
-        try:
-            print("Attempting to load 2stems model...")
-            spleeter_separator = Separator(
-                'spleeter:2stems', 
-                multiprocess=False,
-                stft_backend='tensorflow'
-            )
-            spleeter_model_type = "2stems"
-            print("Spleeter: Using 2stems model (vocals, accompaniment)")
-        except Exception as e2:
-            print(f"2stems model also failed: {e2}")
-            try:
-                print("Attempting to load 2stems-16kHz model...")
-                spleeter_separator = Separator(
-                    'spleeter:2stems-16kHz', 
-                    multiprocess=False,
-                    stft_backend='tensorflow'
-                )
-                spleeter_model_type = "2stems-16kHz"
-                print("Spleeter: Using 2stems-16kHz model")
-            except Exception as e3:
-                print(f"All Spleeter models failed: {e3}")
-                spleeter_separator = None
-                spleeter_model_type = None
-    
-    if spleeter_separator is not None:
-        spleeter_audio_adapter = AudioAdapter.default()
-        print("Spleeter model loaded successfully.")
-    else:
-        print("Spleeter will be disabled for this session.")
-        
-except Exception as e:
-    print(f"Spleeter initialization failed: {e}")
-    spleeter_separator = None
-    spleeter_audio_adapter = None
-    spleeter_model_type = None
+        result = subprocess.run(['spleeter', '--help'], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print("✅ Spleeter command-line tool is available!")
+            return True
+        else:
+            print(f"❌ Spleeter command failed: {result.stderr}")
+            return False
+    except FileNotFoundError:
+        print("❌ Spleeter command not found. Please install Spleeter.")
+        return False
+    except Exception as e:
+        print(f"❌ Error checking Spleeter: {e}")
+        return False
+
+spleeter_available = check_spleeter_installation()
 
 # --- HT-Demucs separation function ---
 def separate_with_htdemucs(audio_path):
@@ -124,14 +78,16 @@ def separate_with_htdemucs(audio_path):
             sources = apply_model(htdemucs_model, wav[None], device=device, progress=True)[0]
         print("HT-Demucs: Separation complete.")
 
-        # Save stems temporarily
-        stem_names = ["drums", "bass", "other", "vocals"]
-        output_dir = "htdemucs_stems"
+        # Save stems with timestamp to ensure uniqueness
+        timestamp = int(time.time() * 1000)  # millisecond timestamp
+        output_dir = f"htdemucs_stems_{timestamp}"
         os.makedirs(output_dir, exist_ok=True)
+        
+        stem_names = ["drums", "bass", "other", "vocals"]
 
         output_paths = []
         for i, name in enumerate(stem_names):
-            out_path = os.path.join(output_dir, f"{name}.wav")
+            out_path = os.path.join(output_dir, f"{name}_{timestamp}.wav")
             torchaudio.save(out_path, sources[i].cpu(), sr)
             output_paths.append(out_path)
             print(f"✅ HT-Demucs saved {name} to {out_path}")
@@ -146,103 +102,79 @@ def separate_with_htdemucs(audio_path):
 def separate_with_spleeter(audio_path):
     """
     Separates an audio file using Spleeter into vocals, drums, bass, other, and piano.
+    Uses command-line execution for reliability.
     Returns FILE PATHS.
     """
     if audio_path is None:
         return None, None, None, None, None, "Please upload an audio file."
 
-    if spleeter_separator is None or spleeter_audio_adapter is None:
-        return None, None, None, None, None, "❌ Spleeter model not loaded properly."
+    if not spleeter_available:
+        return None, None, None, None, None, "❌ Spleeter not available. Please install Spleeter."
 
     try:
-        print(f"Spleeter: Loading audio from: {audio_path}")
+        print(f"Spleeter: Processing audio from: {audio_path}")
         
-        # Use librosa for more robust audio loading
-        try:
-            # Load audio with librosa (handles more formats reliably)
-            waveform, sample_rate = librosa.load(audio_path, sr=44100, mono=False)
-            print(f"Spleeter (librosa): Loaded audio - shape: {waveform.shape}, sr: {sample_rate}")
-            
-            # Handle different audio shapes
-            if waveform.ndim == 1:
-                # Mono audio - convert to stereo for Spleeter
-                print("Spleeter: Converting mono to stereo")
-                waveform = np.stack([waveform, waveform], axis=0)
-            elif waveform.ndim == 2 and waveform.shape[0] == 2:
-                # Stereo audio - already correct format
-                print("Spleeter: Stereo audio detected")
-            else:
-                print(f"Spleeter: Unexpected shape {waveform.shape}, converting...")
-                if waveform.shape[0] > waveform.shape[1]:
-                    # Transpose if needed (samples, channels) -> (channels, samples)
-                    waveform = waveform.T
-                if waveform.shape[0] == 1:
-                    waveform = np.vstack([waveform, waveform])
-                elif waveform.shape[0] > 2:
-                    # Take first two channels if more than stereo
-                    waveform = waveform[:2, :]
-            
-            print(f"Spleeter: Final waveform shape: {waveform.shape}")
-            
-            # Transpose to (samples, channels) format for Spleeter
-            waveform_for_spleeter = waveform.T
-            print(f"Spleeter: Transposed for separation - shape: {waveform_for_spleeter.shape}")
-            
-        except Exception as load_error:
-            print(f"Librosa loading failed: {load_error}")
-            # Fallback to spleeter's audio adapter
-            waveform_for_spleeter, sample_rate = spleeter_audio_adapter.load(audio_path)
-            print(f"Spleeter (adapter): Loaded audio - shape: {waveform_for_spleeter.shape}, sr: {sample_rate}")
-        
-        print("Spleeter: Applying the separation model...")
-        # Use the waveform directly with Spleeter
-        prediction = spleeter_separator.separate(waveform_for_spleeter)
-        print("Spleeter: Separation complete.")
-        print(f"Spleeter: Prediction keys: {list(prediction.keys())}")
-
-        # Save stems temporarily
-        output_dir = "spleeter_stems"
+        # Create output directory with timestamp
+        timestamp = int(time.time() * 1000)
+        output_dir = f"spleeter_stems_{timestamp}"
         os.makedirs(output_dir, exist_ok=True)
-
+        
+        # Run Spleeter command-line tool
+        cmd = [
+            'spleeter', 'separate',
+            '-i', audio_path,
+            '-o', output_dir,
+            '-p', 'spleeter:5stems-16kHz'
+        ]
+        
+        print(f"Spleeter: Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            print(f"Spleeter command failed: {result.stderr}")
+            return None, None, None, None, None, f"❌ Spleeter command failed: {result.stderr}"
+        
+        print("Spleeter: Separation complete.")
+        
+        # Find the separated files
+        # Spleeter creates a subdirectory with the input filename
+        input_filename = os.path.splitext(os.path.basename(audio_path))[0]
+        spleeter_output_dir = os.path.join(output_dir, input_filename)
+        
+        if not os.path.exists(spleeter_output_dir):
+            print(f"Expected output directory not found: {spleeter_output_dir}")
+            return None, None, None, None, None, "❌ Spleeter output directory not found"
+        
+        # Map Spleeter output files to our expected order
+        stem_mapping = {
+            "vocals": "vocals.wav",
+            "drums": "drums.wav", 
+            "bass": "bass.wav",
+            "other": "other.wav",
+            "piano": "piano.wav"
+        }
+        
         output_paths = []
-        
-        # Handle different model types
-        if spleeter_model_type == "5stems":
-            # 5stems model
-            stem_names = ["vocals", "drums", "bass", "other", "piano"]
-        else:
-            # 2stems model
-            stem_names = ["vocals", "accompaniment", None, None, None]
-        
-        for i, name in enumerate(stem_names):
-            if name is not None and name in prediction:
-                out_path = os.path.join(output_dir, f"{name}.wav")
-                stem_audio = prediction[name]
-                
-                print(f"Spleeter: {name} audio shape: {stem_audio.shape}, dtype: {stem_audio.dtype}")
-                
-                # Ensure correct format for saving
-                if stem_audio.ndim == 1:
-                    # Mono - reshape to (samples, 1)
-                    stem_audio = stem_audio.reshape(-1, 1)
-                elif stem_audio.ndim == 2:
-                    # Check if it's (channels, samples) and transpose if needed
-                    if stem_audio.shape[0] < stem_audio.shape[1] and stem_audio.shape[0] <= 2:
-                        stem_audio = stem_audio.T
-                
-                # Save using soundfile for better compatibility
-                sf.write(out_path, stem_audio, sample_rate)
-                output_paths.append(out_path)
-                print(f"✅ Spleeter saved {name} to {out_path}")
+        for stem_name, filename in stem_mapping.items():
+            source_path = os.path.join(spleeter_output_dir, filename)
+            if os.path.exists(source_path):
+                # Copy to our timestamped directory for consistency
+                dest_path = os.path.join(output_dir, f"{stem_name}_{timestamp}.wav")
+                shutil.copy2(source_path, dest_path)
+                output_paths.append(dest_path)
+                print(f"✅ Spleeter saved {stem_name} to {dest_path}")
             else:
+                print(f"⚠️ Warning: {stem_name} file not found: {source_path}")
                 output_paths.append(None)
         
-        # Ensure we have 5 outputs
-        while len(output_paths) < 5:
-            output_paths.append(None)
-
+        # Clean up the intermediate directory
+        if os.path.exists(spleeter_output_dir):
+            shutil.rmtree(spleeter_output_dir)
+        
         return output_paths[0], output_paths[1], output_paths[2], output_paths[3], output_paths[4], "✅ Spleeter separation successful!"
 
+    except subprocess.TimeoutExpired:
+        return None, None, None, None, None, "❌ Spleeter separation timed out (5 minutes)"
     except Exception as e:
         print(f"Spleeter Error: {e}")
         import traceback
@@ -302,12 +234,12 @@ def separate_selected_models(audio_path, run_htdemucs, run_spleeter):
 print("Creating Gradio interface...")
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
-    # 🎵 Music Stem Separator - HT-Demucs & Spleeter Comparison
+    # 🎵 Music Stem Separator - HT-Demucs & Spleeter 2025
     
     Upload your music and get stems from both **HT-Demucs** and **Spleeter** models!
     
     **HT-Demucs** provides: Drums, Bass, Other, Vocals  
-    **Spleeter** provides: Vocals, Drums, Bass, Other, **Piano** 🎹 (5stems model)
+    **Spleeter 2025** provides: Vocals, Drums, Bass, Other, **Piano** 🎹 (5stems model)
     
     Compare the quality and choose the best stems for your needs!
     """)
@@ -320,12 +252,11 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             gr.Markdown("### 🎛️ Select Models to Run")
             with gr.Row():
                 htdemucs_toggle = gr.Checkbox(label="🎯 HT-Demucs", value=True, info="Drums, Bass, Other, Vocals")
-                spleeter_enabled = spleeter_separator is not None
                 spleeter_toggle = gr.Checkbox(
-                    label="🎵 Spleeter", 
-                    value=spleeter_enabled, 
-                    info=f"Available: {spleeter_model_type}" if spleeter_enabled else "Not available",
-                    interactive=spleeter_enabled
+                    label="🎵 Spleeter 2025 (5stems)", 
+                    value=spleeter_available, 
+                    info="Vocals, Drums, Bass, Other, Piano" if spleeter_available else "Not available",
+                    interactive=spleeter_available
                 )
             
             separate_button = gr.Button("🚀 Separate Music", variant="primary", size="lg")
@@ -346,7 +277,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         
         # Spleeter Results
         with gr.Column():
-            gr.Markdown("### 🎵 Spleeter Results")
+            gr.Markdown("### 🎵 Spleeter 2025 Results")
             with gr.Row():
                 spleeter_vocals = gr.Audio(label="🎤 Vocals", type="filepath")
                 spleeter_drums = gr.Audio(label="🥁 Drums", type="filepath")
@@ -356,10 +287,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             with gr.Row():
                 spleeter_piano = gr.Audio(label="🎹 Piano", type="filepath")
             
-            if spleeter_model_type == "2stems":
-                gr.Markdown("*Note: Only Vocals and Accompaniment available with 2stems model*")
-            elif not spleeter_enabled:
-                gr.Markdown("*Note: Spleeter model not available*")
+            if spleeter_available:
+                gr.Markdown("*5stems model: Vocals, Drums, Bass, Other, Piano*")
+            else:
+                gr.Markdown("*Note: Spleeter 5stems model not available*")
 
     gr.Markdown("---")
     
@@ -367,18 +298,17 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         comparison_text = f"""
         ### 📋 Model Comparison
         
-        | Feature | HT-Demucs | Spleeter ({spleeter_model_type if spleeter_model_type else 'N/A'}) |
+        | Feature | HT-Demucs | Spleeter 2025 (5stems) |
         |---------|-----------|----------|
-        | **Vocals** | ✅ High Quality | {'✅ Available' if spleeter_enabled else '❌ N/A'} |
-        | **Drums** | ✅ High Quality | {'✅ Available' if spleeter_model_type == '5stems' else '❌ N/A'} |
-        | **Bass** | ✅ High Quality | {'✅ Available' if spleeter_model_type == '5stems' else '❌ N/A'} |
-        | **Other** | ✅ High Quality | {'✅ Available' if spleeter_model_type == '5stems' else '❌ N/A'} |
-        | **Piano** | ❌ Not Available | {'✅ Available' if spleeter_model_type == '5stems' else '❌ N/A'} |
-        | **Accompaniment** | ❌ Not Available | {'✅ Available' if spleeter_model_type == '2stems' else '❌ N/A'} |
-        | **Speed** | ⚡ Fast | {'⚡ Fast' if spleeter_enabled else '❌ N/A'} |
-        | **Quality** | 🏆 Excellent | {'🏆 Good' if spleeter_enabled else '❌ N/A'} |
+        | **Vocals** | ✅ High Quality | {'✅ Available' if spleeter_available else '❌ N/A'} |
+        | **Drums** | ✅ High Quality | {'✅ Available' if spleeter_available else '❌ N/A'} |
+        | **Bass** | ✅ High Quality | {'✅ Available' if spleeter_available else '❌ N/A'} |
+        | **Other** | ✅ High Quality | {'✅ Available' if spleeter_available else '❌ N/A'} |
+        | **Piano** | ❌ Not Available | {'✅ **Available**' if spleeter_available else '❌ N/A'} |
+        | **Speed** | ⚡ Fast | {'⚡ Fast' if spleeter_available else '❌ N/A'} |
+        | **Quality** | 🏆 Excellent | {'🏆 Good' if spleeter_available else '❌ N/A'} |
         
-        **💡 Tip:** Use Spleeter when you need piano separation, HT-Demucs for other instruments!
+        **💡 Tip:** Use Spleeter 2025 for piano separation, HT-Demucs for other instruments!
         """
         gr.Markdown(comparison_text)
 
@@ -396,7 +326,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
     ---
     <p style='text-align: center; font-size: small;'>
-    🚀 Powered by <strong>HT-Demucs</strong> & <strong>Spleeter</strong> | 
+    🚀 Powered by <strong>HT-Demucs</strong> & <strong>Spleeter 2025</strong> | 
     🎵 Compare and choose your best stems!
     </p>
     """)

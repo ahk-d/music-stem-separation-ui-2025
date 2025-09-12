@@ -3,9 +3,7 @@ spleeter==2.3.2
 tensorflow==2.13.0
 torch
 torchaudio
-gradio==3.50.2
+gradio==4.44.0
 numpy>=1.21.0
 soundfile
-numba==0.55.2
-llvmlite==0.38.1
-# Use compatible numba and llvmlite versions for Spleeter
+librosa
