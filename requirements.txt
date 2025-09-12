@@ -3,7 +3,8 @@ spleeter==2.3.2
 tensorflow==2.13.0
 torch
 torchaudio
-gradio==4.44.0
+gradio==3.50.2
 numpy>=1.21.0
 soundfile
 librosa
+httpx>=0.19.0,<0.20.0
